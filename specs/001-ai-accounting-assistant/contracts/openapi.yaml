@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: FinPilot AI API
+  version: "0.1.0"
+  description: >
+    REST contract for FinPilot AI. Every mutating endpoint here is also
+    reachable through the AI assistant's tool layer (see agent/tools in
+    plan.md, section 6) with identical validation and authorization —
+    the AI never bypasses this contract, it calls the same services.
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Authenticate and receive an access + refresh token pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { description: Invalid credentials }
+
+  /auth/logout:
+    post:
+      summary: Revoke the current refresh token (FR-002)
+      responses:
+        '204': { description: Session invalidated }
+
+  /auth/refresh:
+    post:
+      summary: Exchange a valid refresh token for a new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { description: Refresh token invalid, expired, or revoked }
+
+  /auth/me:
+    get:
+      summary: Current authenticated user + role
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /expenses:
+    get:
+      summary: List/search/filter expenses (FR-011)
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: keyword search on title/description }
+        - { name: category_id, in: query, schema: { type: string, format: uuid } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        '200':
+          description: Paginated expenses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpensePage' }
+    post:
+      summary: Create an expense (FR-009)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpenseCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+        '400': { description: Validation error (FR-012) }
+        '403': { description: Role not permitted (FR-003) }
+
+  /expenses/{expense_id}:
+    parameters:
+      - { name: expense_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Get a single expense
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Expense' } } } }
+        '404': { description: Not found }
+    patch:
+      summary: Update an expense (FR-010)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpenseUpdate' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Expense' } } } }
+        '400': { description: Validation error }
+        '403': { description: Role not permitted }
+        '404': { description: Not found }
+    delete:
+      summary: Soft-delete an expense (FR-010; Office Administrator forbidden per FR-003)
+      responses:
+        '204': { description: Deleted }
+        '403': { description: Role not permitted }
+        '404': { description: Not found }
+
+  /income:
+    get:
+      summary: List/search income (FR-015)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        '200': { description: Paginated income, content: { application/json: { schema: { $ref: '#/components/schemas/IncomePage' } } } }
+    post:
+      summary: Create an income entry (FR-013)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IncomeCreate' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Income' } } } }
+        '400': { description: Validation error (FR-016) }
+
+  /income/{income_id}:
+    parameters:
+      - { name: income_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Get a single income entry
+      responses:
+        '200': { description: OK }
+    patch:
+      summary: Update an income entry (FR-014)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IncomeUpdate' }
+      responses:
+        '200': { description: Updated }
+    delete:
+      summary: Soft-delete an income entry (Office Administrator forbidden per FR-003)
+      responses:
+        '204': { description: Deleted }
+        '403': { description: Role not permitted }
+
+  /categories:
+    get:
+      summary: List categories
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Category' } } } } }
+    post:
+      summary: Create a category
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryCreate' }
+      responses:
+        '201': { description: Created }
+
+  /ledger:
+    get:
+      summary: Unified, paginated income+expense history (FR-017, FR-018)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: string, format: uuid } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: sort_by, in: query, schema: { type: string, enum: [date, amount] } }
+        - { name: sort_dir, in: query, schema: { type: string, enum: [asc, desc] } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: Paginated ledger entries, content: { application/json: { schema: { $ref: '#/components/schemas/LedgerPage' } } } }
+
+  /dashboard/summary:
+    get:
+      summary: Totals, monthly summary, category breakdown, recent transactions (FR-005–FR-008)
+      parameters:
+        - { name: period, in: query, schema: { type: string, example: "2026-07" } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardSummary' } } } }
+
+  /reports/profit-and-loss:
+    get: { $ref: '#/components/pathItems/ReportRequest' }
+  /reports/balance-sheet:
+    get: { $ref: '#/components/pathItems/ReportRequestOwnerAccountantOnly' }
+  /reports/trial-balance:
+    get: { $ref: '#/components/pathItems/ReportRequestOwnerAccountantOnly' }
+  /reports/cash-flow:
+    get: { $ref: '#/components/pathItems/ReportRequest' }
+  /reports/monthly-expenses:
+    get: { $ref: '#/components/pathItems/ReportRequest' }
+  /reports/income:
+    get: { $ref: '#/components/pathItems/ReportRequest' }
+  /reports/category-expenses:
+    get: { $ref: '#/components/pathItems/ReportRequest' }
+
+  /ai/chat:
+    post:
+      summary: Send a natural-language message to the AI assistant (FR-023–FR-026, FR-028)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AIChatRequest' }
+      responses:
+        '200':
+          description: >
+            Assistant response — either an answer, a clarifying question, or a
+            proposed create/update/delete action awaiting confirmation (FR-027).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIChatResponse' }
+        '503': { description: AI service unavailable (FR-033) }
+
+  /ai/interactions/{interaction_id}/confirm:
+    parameters:
+      - { name: interaction_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      summary: Confirm a proposed AI action, committing it (FR-027)
+      responses:
+        '200': { description: Action applied, content: { application/json: { schema: { $ref: '#/components/schemas/AIChatResponse' } } } }
+        '409': { description: Interaction already resolved or expired }
+
+  /ai/interactions/{interaction_id}/reject:
+    parameters:
+      - { name: interaction_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      summary: Reject a proposed AI action; nothing is applied (FR-027)
+      responses:
+        '200': { description: Action discarded }
+
+  /audit-logs:
+    get:
+      summary: Audit trail (FR-037); Business Owner + Accountant only (FR-038)
+      parameters:
+        - { name: entity_type, in: query, schema: { type: string, enum: [expense, income, category, user] } }
+        - { name: entity_id, in: query, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AuditLogPage' } } } }
+        '401': { description: Unauthenticated }
+        '403': { description: Office Administrator forbidden }
+
+  /healthz:
+    get:
+      summary: Backend + DB reachability check, used by Docker/CI/uptime monitoring
+      security: []
+      responses:
+        '200': { description: Backend and database both reachable }
+        '503': { description: Database unreachable }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  pathItems:
+    ReportRequest:
+      summary: Generate a report for a date range (FR-019–FR-021)
+      parameters:
+        - { name: date_from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: date_to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid date range (FR-021) }
+        '403': { description: Role not permitted (FR-022) }
+    ReportRequestOwnerAccountantOnly:
+      summary: Generate a report restricted to Business Owner + Accountant (FR-022)
+      parameters:
+        - { name: date_from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: date_to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid date range }
+        '403': { description: Office Administrator forbidden }
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: bearer }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [business_owner, accountant, office_administrator] }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [expense, income, both] }
+        is_archived: { type: boolean }
+
+    CategoryCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [expense, income, both], default: expense }
+
+    Expense:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        amount: { type: number, format: decimal }
+        category_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+        created_by: { type: string, format: uuid }
+        created_via: { type: string, enum: [manual, ai] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        flags:
+          type: array
+          description: >-
+            Implementation addition (Phase 7/T082) not in the original
+            contract: passive duplicate/unusually-large-expense flags
+            (FR-030/FR-031). Always empty on GET/list/update responses —
+            only ever populated on the POST /expenses create response.
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [duplicate, large_expense] }
+              message: { type: string }
+          default: []
+
+    ExpenseCreate:
+      type: object
+      required: [title, amount, category_id, date]
+      properties:
+        title: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        category_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+
+    ExpenseUpdate:
+      allOf:
+        - $ref: '#/components/schemas/ExpenseCreate'
+      description: All fields optional on update.
+
+    ExpensePage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Expense' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+
+    Income:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source: { type: string }
+        amount: { type: number, format: decimal }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+        created_by: { type: string, format: uuid }
+        created_via: { type: string, enum: [manual, ai] }
+
+    IncomeCreate:
+      type: object
+      required: [source, amount, date]
+      properties:
+        source: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+
+    IncomeUpdate:
+      allOf:
+        - $ref: '#/components/schemas/IncomeCreate'
+      description: All fields optional on update.
+
+    IncomePage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Income' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+
+    LedgerEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [expense, income] }
+        label: { type: string, description: "title (expense) or source (income)" }
+        amount: { type: number }
+        category: { type: string, nullable: true }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+        created_via: { type: string, enum: [manual, ai] }
+
+    LedgerPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/LedgerEntry' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+
+    AuditLogEntry:
+      type: object
+      description: "Implementation addition (Phase 9) — GET /audit-logs was in the original path list but had no schema."
+      properties:
+        id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [user, ai] }
+        actor_user_id: { type: string, format: uuid }
+        entity_type: { type: string, enum: [expense, income, category, user] }
+        entity_id: { type: string, format: uuid }
+        action: { type: string, enum: [create, update, delete] }
+        before_state: { type: object, nullable: true }
+        after_state: { type: object, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    AuditLogPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditLogEntry' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+
+    DashboardSummary:
+      type: object
+      properties:
+        total_income: { type: number }
+        total_expenses: { type: number }
+        net_profit: { type: number }
+        monthly_summary: { type: array, items: { type: object } }
+        expense_categories: { type: array, items: { type: object } }
+        recent_transactions: { type: array, items: { $ref: '#/components/schemas/LedgerEntry' } }
+
+    AIChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, example: "Add office rent 50000 for July" }
+        conversation_id: { type: string, format: uuid, nullable: true }
+
+    AIChatResponse:
+      type: object
+      properties:
+        interaction_id: { type: string, format: uuid }
+        conversation_id:
+          type: string
+          format: uuid
+          description: >-
+            Implementation addition (Phase 7) not in the original contract:
+            the LangGraph thread_id backing this exchange. Echo it back on
+            the next /ai/chat call in the same conversation so multi-turn
+            clarification and the confirm-node interrupt/resume correctly
+            target the same graph checkpoint.
+        status: { type: string, enum: [proposed, confirmed, rejected, expired, clarification_requested, answered] }
+        message: { type: string, description: "assistant's natural-language reply" }
+        proposed_action: { type: object, nullable: true, description: "present when status=proposed; shown to user for confirmation per FR-027" }
+        data: { type: object, nullable: true, description: "structured result for answered/report/analysis responses" }
