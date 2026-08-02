@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
+from src.core.money import parse_amount
 from src.models.audit_log import ActorType, AuditAction, AuditEntityType
 from src.models.expense import CreatedVia, Expense
 from src.models.user import User, UserRole
@@ -71,7 +72,7 @@ class ExpenseService:
         description: str | None = None,
         created_via: CreatedVia = CreatedVia.MANUAL,
     ) -> Expense:
-        await self._validate_amount(amount)
+        amount = parse_amount(amount)
         await self._validate_title(title)
         await self._validate_category(category_id)
 
@@ -119,8 +120,7 @@ class ExpenseService:
             await self._validate_title(title)
             fields["title"] = title
         if amount is not None:
-            await self._validate_amount(amount)
-            fields["amount"] = amount
+            fields["amount"] = parse_amount(amount)
         if category_id is not None:
             await self._validate_category(category_id)
             fields["category_id"] = category_id
@@ -181,10 +181,6 @@ class ExpenseService:
             direction="reverse",
         )
         await self._db.commit()
-
-    async def _validate_amount(self, amount) -> None:
-        if amount is None or amount <= 0:
-            raise ValidationError("Amount must be greater than 0", field="amount")
 
     async def _validate_title(self, title: str) -> None:
         if not title or not title.strip():

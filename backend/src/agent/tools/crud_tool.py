@@ -6,7 +6,6 @@ never bypass FR-034 validation or FR-003 permission checks (see research.md
 
 import uuid
 from datetime import date
-from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +40,7 @@ async def add_expense(db: AsyncSession, *, actor: User, args: AddExpense) -> Exp
     return await ExpenseService(db).create_expense(
         actor=actor,
         title=args.title,
-        amount=Decimal(str(args.amount)),
+        amount=args.amount,
         category_id=category.id,
         date=date.fromisoformat(args.date),
         description=args.description,
@@ -53,7 +52,7 @@ async def add_income(db: AsyncSession, *, actor: User, args: AddIncome) -> Incom
     return await IncomeService(db).create_income(
         actor=actor,
         source=args.source,
-        amount=Decimal(str(args.amount)),
+        amount=args.amount,
         date=date.fromisoformat(args.date),
         description=args.description,
         created_via=CreatedVia.AI,
