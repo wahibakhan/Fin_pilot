@@ -98,7 +98,12 @@ export function AIChatPanel() {
           placeholder="Ask FinPilot AI…"
           disabled={unavailable || isSending}
         />
-        <Button type="submit" size="icon" disabled={unavailable || isSending || !draft.trim()}>
+        <Button
+          type="submit"
+          size="icon"
+          aria-label="Send"
+          disabled={unavailable || isSending || !draft.trim()}
+        >
           <Send className="size-4" />
         </Button>
       </form>
