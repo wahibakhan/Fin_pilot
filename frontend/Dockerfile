@@ -12,6 +12,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV BUILD_STANDALONE=1
 
 # NEXT_PUBLIC_* vars are inlined into the client bundle at build time, not
 # read at runtime — must be supplied as a build arg (docker-compose.yml's
