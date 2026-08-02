@@ -49,7 +49,11 @@ class ReportService:
 
         cash = await self._account_balance("Cash", through=date_to)
         expenses = await self._account_balance("Expenses", through=date_to)
-        revenue = await self._account_balance("Revenue", through=date_to)
+        # Revenue is a credit-normal account (its balance grows with credits,
+        # e.g. the credit side of an income posting) — unlike Cash/Expenses,
+        # which are debit-normal. Using the same debit-credit formula for it
+        # would report earned revenue as negative.
+        revenue = await self._account_balance("Revenue", through=date_to, normal_balance="credit")
         retained_earnings = revenue - expenses
 
         return {
@@ -207,9 +211,13 @@ class ReportService:
         )
         return (await self._db.execute(stmt)).scalar_one()
 
-    async def _account_balance(self, account: str, *, through: date) -> Decimal:
+    async def _account_balance(
+        self, account: str, *, through: date, normal_balance: str = "debit"
+    ) -> Decimal:
         debit = await self._sum_journal_through(account, JournalEntryType.DEBIT, through)
         credit = await self._sum_journal_through(account, JournalEntryType.CREDIT, through)
+        if normal_balance == "credit":
+            return credit - debit
         return debit - credit
 
     async def _sum_journal_through(
