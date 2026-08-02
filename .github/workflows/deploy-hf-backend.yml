@@ -13,14 +13,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Push backend/ subtree to the Hugging Face Space
+      # Avoids `git subtree`, which isn't reliably available on every
+      # runner image — instead just copies backend/'s contents into a
+      # fresh throwaway repo and force-pushes that, which is what a
+      # Hugging Face Space (Dockerfile expected at repo root) needs.
+      - name: Push backend/ to the Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -euo pipefail
+          rm -rf /tmp/hf-export
+          mkdir -p /tmp/hf-export
+          cp -r backend/. /tmp/hf-export/
+          cd /tmp/hf-export
+          git init -q
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git subtree split --prefix=backend -b hf-export
-          git push --force "https://wahibakhan:${HF_TOKEN}@huggingface.co/spaces/wahibakhan/Finpilot" hf-export:main
+          git add -A
+          git commit -q -m "Deploy from ${GITHUB_SHA}"
+          git push --force "https://wahibakhan:${HF_TOKEN}@huggingface.co/spaces/wahibakhan/Finpilot" HEAD:main
