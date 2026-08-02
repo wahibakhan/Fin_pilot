@@ -59,6 +59,12 @@ def _encode_token(
     payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type.value,
+        # iat/exp only have second-level precision, so without a random
+        # component two tokens issued for the same user within the same
+        # second (e.g. rapid refresh calls in a test suite) would encode to
+        # the identical JWT string — colliding on refresh_tokens.token_hash's
+        # unique constraint.
+        "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": now + expires_delta,
     }
