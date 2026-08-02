@@ -13,14 +13,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # Install dependencies first, separately from app code, so this layer only
 # invalidates when pyproject.toml/uv.lock change (not on every source edit).
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
 
 COPY . /app
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
     uv sync --frozen --no-dev
 
 # ---- Runtime: no uv, no dev dependencies, non-root user ----
