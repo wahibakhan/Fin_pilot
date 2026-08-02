@@ -65,6 +65,7 @@ class AuthService:
 
         # Rotate: revoke the presented token, issue a brand new pair.
         await self._refresh_tokens.revoke(record)
+        await self._db.commit()  # Commit revocation before issuing new token
         return await self._issue_token_pair(user)
 
     async def logout(self, *, refresh_token: str) -> None:
