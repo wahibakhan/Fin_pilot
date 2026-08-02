@@ -13,14 +13,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # Install dependencies first, separately from app code, so this layer only
 # invalidates when pyproject.toml/uv.lock change (not on every source edit).
-# No --mount=type=cache here (dropped): it sped up local rebuilds, but
-# different BuildKit builders (Railway's Metal builder in particular)
-# disagree on the required `id=` format for a cache mount reused across two
-# RUN instructions, which isn't worth chasing for a pure build-speed
-# optimization.
-RUN --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+# Plain COPY rather than --mount=type=cache/bind: those BuildKit mount
+# features aren't uniformly supported across every builder this image
+# deploys on (Railway's Metal builder in particular only supports
+# type=cache mounts, not type=bind) — plain COPY relies on nothing but
+# standard Dockerfile behavior, which every builder supports.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
 
 COPY . /app
 
