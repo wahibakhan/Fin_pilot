@@ -23,8 +23,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "latest"
       - run: uv sync --dev
@@ -44,8 +44,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -69,7 +69,7 @@ jobs:
   #   needs: [backend-lint-test, frontend-lint-test]
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - run: cp .env.example .env
   #     - run: docker compose up -d --build
   #     - run: npx playwright install --with-deps chromium
@@ -87,8 +87,8 @@ jobs:
   #     run:
   #       working-directory: backend
   #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: astral-sh/setup-uv@v3
+  #     - uses: actions/checkout@v7
+  #     - uses: astral-sh/setup-uv@v9.0.0
   #     - run: uv sync --dev
   #     - name: Run migrations against production Neon branch
   #       run: uv run alembic upgrade head
