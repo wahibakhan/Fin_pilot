@@ -32,4 +32,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "Deploy from ${GITHUB_SHA}"
-          git push --force "https://wahibakhan:${HF_TOKEN}@huggingface.co/spaces/wahibakhan/Finpilot" HEAD:main
+          git push --force "https://wahibakhan:${HF_TOKEN}@huggingface.co/spaces/wahibakhan/fin" HEAD:main
