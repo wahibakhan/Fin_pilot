@@ -33,7 +33,21 @@ jobs:
         run: uv run alembic upgrade head
         env:
           DATABASE_URL: postgresql+asyncpg://finpilot:finpilot@localhost:5432/finpilot
-      - run: uv run pytest -q
+      - name: Run tests
+        run: |
+          set +e
+          uv run pytest -q 2>&1 | tee pytest_output.txt
+          exit_code=${PIPESTATUS[0]}
+          if [ "$exit_code" -ne 0 ]; then
+            summary=$(grep -A 200 "short test summary info" pytest_output.txt | head -60)
+            # GitHub annotation messages need literal %0A for newlines and
+            # %25/%0D escaped first — this surfaces the actual failures in
+            # the check-runs annotations API, which is otherwise the only
+            # part of a CI failure visible without repo-admin log access.
+            escaped=$(echo "$summary" | sed 's/%/%25/g; s/\r/%0D/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error::Pytest failures:%0A${escaped}"
+          fi
+          exit "$exit_code"
         env:
           DATABASE_URL: postgresql+asyncpg://finpilot:finpilot@localhost:5432/finpilot
           JWT_SECRET: ci-test-secret-not-for-production-use
